@@ -9,11 +9,9 @@ prescriptiveRule(r1, stop(T, X)) :- tf(T, X).
 applicable(r1, stop(T, X)) :- defeasible(traffic_light(ID, X)), defeasible(state(T, traffic_light(ID, red))).
 compensate(r1, stop(T, X), pay_fine, 1) :- tf(T, X).
 
-permissiveRule(r2, non(stop(T, X))) :- tf(T, X).
-applicable(r2, non(stop(T, X))) :- defeasible(traffic_light(ID, X)), defeasible(state(T, traffic_light(ID, red))), defeasible(emergency).
-
-constitutiveRule(r3, non(stop(T, X))) :- tf(T, X).
-applicable(r3, non(stop(T, X))) :- obligation(stop(T, X)), defeasible(state(T, position(X))), defeasible(trace(T, move(_))).
+constitutiveRule(r2, non(stop(T, X))) :- tf(T, X).
+applicable(r2, non(stop(T, X))) :- obligation(stop(T, X)), defeasible(state(T, position(X))), defeasible(trace(T, move(_))).
+convertPermission(r2, non(stop(T, X))) :- defeasible(traffic_light(ID, X)), defeasible(state(T, traffic_light(ID, red))), defeasible(emergency).
 
 fact(trace(T, move(X))) :- trace(T, move(X)).
 

@@ -1,6 +1,7 @@
-% Copyright (c) 2022-2025 Guido Governatori 
+% Copyright (c) 2022-2025 Guido Governatori.
+% Safe to delete I think
 
-#include "../language.asp".
+#include "Deontic/base-language.asp".
 
 rule(R,X) :- constitutiveRule(R,X).
 rule(R,X) :- prescriptiveRule(R,X).

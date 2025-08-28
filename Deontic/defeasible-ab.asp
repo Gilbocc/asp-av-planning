@@ -1,9 +1,9 @@
 % copyright (c) 2022-2025 Guido Governatori
 
-#include "language.asp".
+#include "Deontic/base-language.asp".
 
 % every fact X holds defeasibly
-defeasible(X) :-  fact(X).
+defeasible(X) :- fact(X).
 
 % X holds defeasibly, it there is not fact X1 opposing X, and
 % there is an applicable constitutive rule R for X that is not overruled for X.
