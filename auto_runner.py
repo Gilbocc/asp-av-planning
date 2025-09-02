@@ -1,0 +1,94 @@
+import clingo
+from clingo import Function
+import sys
+import os
+
+global_asp = "global.asp"
+local_asp = "local.asp"
+retry = True
+
+with open("global.asp") as f:
+    global_asp_content = f.read()
+
+# Run Clingo on global.asp and extract optimum trace
+
+def get_optimum_trace(global_asp_path, start, ignore=None):
+
+    ctl = clingo.Control()
+    ctl.load(global_asp_path)
+    ctl.add("base", [], f"fact(state(0, position({start}))).")
+    # This should live elsewhere
+    if ignore:
+        facts = ignore[:2]
+        print(f"Ignoring facts: {facts}")
+        A = facts[0].arguments[1].arguments[0].name
+        B = facts[1].arguments[1].arguments[0].name
+        ctl.add("base", [], f":- trace(T,move({A})), trace(T1,move({B})), not trace(T2, move(X)) : time(T2), node(X), X != {A}, X != {B}, T < T2 < T1.")
+    ctl.ground([("base", [])])
+    optimum_models = []
+    min_cost = None
+
+    def on_model(model):
+        # print("Model:", model.symbols(shown=True), "Cost:", model.cost)
+        nonlocal min_cost
+        cost = model.cost if model.cost else 0
+        if min_cost is None or cost < min_cost:
+            min_cost = cost
+            optimum_models.clear()
+            optimum_models.append(model.symbols(shown=True))
+        elif cost == min_cost:
+            optimum_models.append(model.symbols(shown=True))
+
+    ctl.solve(on_model=on_model)
+
+    optimum_models.sort(key=len)
+    return optimum_models, min_cost
+
+# Convert trace atoms to global_trace facts
+
+def trace_atoms_to_global_trace(atoms):
+    facts = []
+    for atom in atoms:
+        arguments = atom.arguments
+        facts.append(Function("global_trace", arguments))
+    print("Input trace atoms:", type(atoms))
+    print("Extracted trace atoms:", facts)
+    facts.sort(key=lambda x: int(x.arguments[0].number))
+    # There has to be a better way to do this...
+    string_facts = [str(x) + "." for x in facts]
+    print(f"Converted to global_trace facts: {string_facts}")
+    return string_facts[:2]
+
+def get_local_trace(local, start, facts):
+    ctl = clingo.Control()
+    ctl.load(local)
+    ctl.add("base", [], f"fact(state(0, position({start}))).")
+    ctl.add("base", [], '\n'.join(facts))
+    ctl.ground([("base", [])])
+    proposed_models = []
+
+    def on_model(model):
+        nonlocal proposed_models
+        proposed_models.append(model.symbols(shown=True))
+    
+    ctl.solve(on_model=on_model)
+    return proposed_models
+
+def select_action(ignore=None, start="a"):
+    global retry
+    models, cost = get_optimum_trace(global_asp, start, ignore)
+    print(f"Found {len(models)} optimum models with cost {cost}.")
+    if models:
+        global_trace = models[0]
+        facts = trace_atoms_to_global_trace(global_trace)
+        proposed_model = get_local_trace(local_asp, start, facts)
+        print(f"Proposed {len(proposed_model)} local trace model: {proposed_model[0]}")
+        if "violation" in str(proposed_model[0]):
+            print("Violation detected in the proposed model.")
+            # Hopefully this does not loop forever
+            select_action(ignore=global_trace)
+    else:
+        print("No optimum trace found.")
+
+if __name__ == "__main__":
+    select_action()

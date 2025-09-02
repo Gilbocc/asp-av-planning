@@ -90,8 +90,8 @@ fact(state(T+1, X)) :- fact(state(T, X)), time(T+1), not -fact(state(T+1, X)).
 % Planning Problem
 % -------------------------------------
 
-global_trace(0,move(b)). 
-global_trace(1,move(g)).
+% global_trace(0,move(b)). 
+% global_trace(1,move(g)).
 
 1 { trace(T, X) : time(T), action(T, X) } 1 :- global_trace(GT, X).
 
