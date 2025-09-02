@@ -65,6 +65,7 @@ class ClingoApp(Application):
         return string_facts[:2]
 
     def get_local_trace(self, local, start, facts):
+        print("Getting local trace with facts:", facts, start)
         ctl = clingo.Control()
         ctl.load(local)
         ctl.add("base", [], f"fact(state(0, position({start}))).")
@@ -78,20 +79,38 @@ class ClingoApp(Application):
         
         ctl.solve(on_model=on_model)
         return proposed_models
+    
+    def run_short_path(self, global_trace, start):
+        facts = self.trace_atoms_to_global_trace(global_trace)
+        proposed_model = self.get_local_trace(local_asp, start, facts)
+        if not proposed_model:
+            print("No proposed model found.")
+            return
+        if len(proposed_model[0]) == 0:
+            print("Destination reached.")
+            return
+        print(f"Proposed {len(proposed_model)} local trace model: {proposed_model[0]}")
+        # For now we assume we do not want violations
+        # To be refined later
+        if "violation" in str(proposed_model[0]):
+            print("Violation detected in the proposed model.")
+            # Hopefully this does not loop forever
+            self.select_action(ignore=global_trace)
+        else:
+            print("No violation detected. Action accepted. Continuing...")
+            new_trace = global_trace[2:]
+            new_start = global_trace[1].arguments[-1].arguments[0].name
+            print("Remaining trace", new_trace, new_start)
+            self.run_short_path(new_trace, new_start)
 
     def select_action(self, ignore=None, start="a"):
-        global retry
         models, cost = self.get_optimum_trace(global_asp, start, ignore)
         print(f"Found {len(models)} optimum models with cost {cost}.")
         if models:
-            global_trace = models[0]
-            facts = self.trace_atoms_to_global_trace(global_trace)
-            proposed_model = self.get_local_trace(local_asp, start, facts)
-            print(f"Proposed {len(proposed_model)} local trace model: {proposed_model[0]}")
-            if "violation" in str(proposed_model[0]):
-                print("Violation detected in the proposed model.")
-                # Hopefully this does not loop forever
-                self.select_action(ignore=global_trace)
+            global_trace = list(models[0])
+            global_trace.sort(key=lambda x: x.arguments[0].number)
+            print("Global trace:", global_trace)
+            self.run_short_path(global_trace, start)
         else:
             print("No optimum trace found.")
 

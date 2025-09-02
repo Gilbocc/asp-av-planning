@@ -52,7 +52,7 @@ invert(forward, backward).
 % World State
 % -------------------------------------
 
-fact(state(0, position(a))).
+% fact(state(0, position(a))).
 fact(state(0, fuel(2))).
 fact(state(0, direction(forward))).
 fact(state(0, traffic_light(tl1, red))).
