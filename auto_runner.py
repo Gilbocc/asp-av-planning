@@ -5,11 +5,9 @@ import os
 
 global_asp = "global.asp"
 local_asp = "local.asp"
-retry = True
-cpu_count = os.cpu_count() if os.cpu_count() else 1
 
-with open("global.asp") as f:
-    global_asp_content = f.read()
+# Enable parallel mode in clingo
+cpu_count = os.cpu_count() if os.cpu_count() else 1
 
 class ClingoApp(Application):
 
@@ -30,6 +28,7 @@ class ClingoApp(Application):
             print(f"Ignoring facts: {facts}", "\n")
             A = facts[0].arguments[1].arguments[0].name
             B = facts[1].arguments[1].arguments[0].name
+            # Exclude the ignored short path. From the ASP code
             ctl.add("base", [], f":- trace(T,move({A})), trace(T1,move({B})), not trace(T2, move(X)) : time(T2), node(X), X != {A}, X != {B}, T < T2 < T1.")
         ctl.ground([("base", [])])
         optimum_models = []
@@ -68,20 +67,21 @@ class ClingoApp(Application):
 
     def get_local_trace(self, local, start, facts):
         print("Getting local trace with facts:", facts, " from ", start, "\n")
-        ctl = clingo.Control(["--warn=none"])
+        ctl = clingo.Control(["--warn=none", f"--parallel-mode={cpu_count}"])
         ctl.load(local)
         ctl.add("base", [], f"fact(state(0, position({start}))).")
         ctl.add("base", [], '\n'.join(facts))
         ctl.ground([("base", [])])
         proposed_models = []
 
+        # Currently there is only one model returned here.
         def on_model(model):
             nonlocal proposed_models
             proposed_models.append(model.symbols(shown=True))
-        
+
         ctl.solve(on_model=on_model)
         return proposed_models
-    
+
     def run_short_path(self, global_trace, start):
         facts = self.trace_atoms_to_global_trace(global_trace)
         proposed_model = self.get_local_trace(local_asp, start, facts)
@@ -93,7 +93,11 @@ class ClingoApp(Application):
             return
         print(f"Proposed {len(proposed_model)} local trace model: {proposed_model[0]}", "\n")
         # For now we assume we do not want violations
-        # To be refined later
+        # To be refined later as part of the ASP code
+        # Replace with short term planner with preference. If optimize by violations (with specific number)
+        # then fail if returns no possible models.
+        # The short term planner should also recommend not breaking the rule, so waiting at the light.
+        # We can assume for now that the increase in time to avoid a violation is 1 and recalculate with that info.
         if "violation" in str(proposed_model[0]):
             print("Violation detected in the proposed model.", "\n")
             # Hopefully this does not loop forever
