@@ -8,7 +8,7 @@
 % -------------------------------------
 
 prescriptiveRule(r1, stop(T, X)) :- tf(T, X).
-applicable(r1, stop(T, X)) :- defeasible(traffic_light(ID, X)), defeasible(state(T, traffic_light(ID, red))).
+applicable(r1, stop(T, X)) :- defeasible(traffic_light(ID, X)), defeasible(state(T, traffic_light(ID, red))), defeasible(state(T, direction(forward))).
 compensate(r1, stop(T, X), pay_fine, 1) :- tf(T, X).
 
 constitutiveRule(r2, non(stop(T, X))) :- tf(T, X).
@@ -32,12 +32,10 @@ tf(T, X) :- fact(traffic_light(ID, X)), fact(state(T, traffic_light(ID, red))).
 fact(state(0, direction(forward))).
 fact(state(0, traffic_light(tl1, red))).
 
-% fact(state(T, traffic_light(tl2, red))) :- time(T), T \ 14 = 3.
-% -fact(state(T, traffic_light(tl2, green))) :- time(T), T \ 14 = 3.
-% fact(state(T, traffic_light(tl2, green))) :- time(T), T \ 14 = 5.
-% -fact(state(T, traffic_light(tl2, red))) :- time(T), T \ 14 = 5.
-fact(state(T, traffic_light(tl2, red))) :- time(T), T \ 14 = 7.
--fact(state(T, traffic_light(tl2, green))) :- time(T), T \ 14 = 7.
+fact(state(T, traffic_light(tl2, red))) :- time(T), T \ 2 = 0.
+-fact(state(T, traffic_light(tl2, green))) :- time(T), T \ 2 = 0.
+fact(state(T, traffic_light(tl2, green))) :- time(T), T \ 2 = 1.
+-fact(state(T, traffic_light(tl2, red))) :- time(T), T \ 2 = 1.
 
 % -------------------------------------
 % Planning Problem
@@ -50,8 +48,8 @@ fact(state(T, traffic_light(tl2, red))) :- time(T), T \ 14 = 7.
 %goal :- fact(state(_, position(g))).
 %:- not goal.
 
-% 0 { trace(T, X) : action(T, X) } 1 :- time(T).
-1 { trace(T, X) : time(T), action(T, X) } 1 :- global_trace(GT, X).
+0 { trace(T, X) : action(T, X) } 1 :- time(T).
+% 1 { trace(T, X) : time(T), action(T, X) } 1 :- global_trace(GT, X).
 
 % :- global_trace(GT1, X1), global_trace(GT2, X2), GT1 < GT2, trace(T1, X1), trace(T2, X2), T1 >= T2.
 

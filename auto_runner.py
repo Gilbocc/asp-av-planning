@@ -6,6 +6,12 @@ import os
 global_asp = "global.asp"
 local_asp = "local.asp"
 
+TIME_SPAN = 4
+PATH_LENGTH = 2
+
+# TIME_SPAN = 6
+# PATH_LENGTH = 1
+
 # Enable parallel mode in clingo
 cpu_count = os.cpu_count() if os.cpu_count() else 1
 
@@ -24,12 +30,18 @@ class ClingoApp(Application):
         ctl.add("base", [], f"fact(state({start_time}, position({start}))).")
         # This should live elsewhere
         if ignore:
-            facts = ignore[:2]
-            print(f"Ignoring facts: {[str(x) for x in facts]}", "\n")
-            A = facts[0].arguments[1].arguments[0].name
-            B = facts[1].arguments[1].arguments[0].name
+            fact =None
+            for fact in ignore:
+                if fact.name == "violation":
+                    v_time, v_position = fact.arguments[1].arguments
+            for fact in ignore:
+                if fact.name =="trace" and fact.arguments[0] == v_time:
+                    v_destination = fact.arguments[1].arguments[0]
+            print(f"Ignoring violation at time {v_time} position {v_position} to {v_destination}", "\n")
+            A = v_position
+            B = v_destination
             # Exclude the ignored short path. From the ASP code
-            ctl.add("base", [], f":- trace(T,move({A})), trace(T1,move({B})), not trace(T2, move(X)) : time(T2), node(X), X != {A}, X != {B}, T < T2 < T1.")
+            ctl.add("base", [], f":- fact(state(T,position({A}))), fact(state(T1,position({B}))), not fact(state(T2,position(X))) : time(T2), node(X), X != {A}, X != {B}, T < T2 < T1.")
         ctl.ground([("base", [])])
         optimum_models = []
         min_cost = None
@@ -63,26 +75,38 @@ class ClingoApp(Application):
         # There has to be a better way to do this...
         # string_facts = [str(x) + "." for x in facts]
         # print(f"Converted to global_trace facts: {string_facts}", "\n")
-        return facts[:2]
+        real_plen = 0
+        for i, fact in enumerate(facts):
+            if fact.arguments[1].name == "move":
+                real_plen += 1
+            if real_plen == PATH_LENGTH:
+                return facts[:i+1]
 
     def get_local_trace(self, local, start, start_time, facts):
         string_facts = [str(x) + "." for x in facts]
         goal = facts[-1].arguments[-1].arguments[0]
         print("Getting local trace with facts:", string_facts, "from", start, "to", goal, "at", start_time, "\n")
-        ctl = clingo.Control(["--warn=none", f"--parallel-mode={cpu_count}"])
+        ctl = clingo.Control(["--warn=none"])
         ctl.load(local)
         ctl.add("base", [], f"fact(state({start_time}, position({start}))).")
         ctl.add("base", [], f"fact(state({start_time}, direction(forward))).")
-        ctl.add("base", [], f"time({start_time}..{start_time+2}).")
+        ctl.add("base", [], f"time({start_time}..{start_time+TIME_SPAN}).")
         ctl.add("base", [], f"goal :- fact(state(_, position({goal}))).\n:- not goal.")
         ctl.add("base", [], '\n'.join(string_facts))
         ctl.ground([("base", [])])
         proposed_models = []
+        min_cost = None
 
-        # Currently there is only one model returned here.
         def on_model(model):
-            nonlocal proposed_models
-            proposed_models.append(model.symbols(shown=True))
+            # print("\n", "Model:", model.symbols(shown=True), "Cost:", model.cost)
+            nonlocal min_cost
+            cost = model.cost if model.cost else 0
+            if min_cost is None or cost < min_cost:
+                min_cost = cost
+                proposed_models.clear()
+                proposed_models.append(model.symbols(shown=True))
+            elif cost == min_cost:
+                proposed_models.append(model.symbols(shown=True))
 
         ctl.solve(on_model=on_model)
         return proposed_models
@@ -92,32 +116,32 @@ class ClingoApp(Application):
 
     def run_short_path(self, global_trace, start, start_time):
         facts = self.trace_atoms_to_global_trace(global_trace)
-        proposed_model = self.get_local_trace(local_asp, start, start_time, facts)
+        proposed_model = self.get_local_trace(local_asp, start, start_time, facts)[0]
         if not proposed_model:
             print("No proposed model found.", "\n")
             # This shouldn't happen, but if there is no valid short term plan at all then call the long term planner again.
-            self.select_action(ignore=global_trace, start=start, start_time=start_time)
+            self.select_action(ignore=None, start=start, start_time=start_time)
         # If the proposed model is < 2 it means that either I am at my destination, or a single move will take me there.
         # Change with the short term plan.
-        elif len(proposed_model[0]) < 2:
+        elif len(proposed_model) == 0:
             self.destination_reached()
         else:
-            print(f"Proposed {len(proposed_model)} local trace model: {proposed_model[0]}", "\n")
+            print(f"Proposed {len(proposed_model)} local trace model:\n{proposed_model}", "\n")
             # For now we assume we do not want violations
             # Replace with short term planner with preference as input. Should work by tweaking the minimize instructions
             # This then launches a global trace if there is no valid short term path
-            if "violation" in str(proposed_model[0]):
+            if "violation" in str(proposed_model):
                 print("Violation detected in the proposed model. Rerouting from", start, start_time, "\n")
                 # Hopefully this does not loop forever
-                self.select_action(ignore=global_trace, start=start, start_time=start_time)
+                self.select_action(ignore=proposed_model, start=start, start_time=start_time)
             else:
                 print("No violation detected. Action accepted. Continuing...", "\n")
-                new_trace = global_trace[2:]
+                new_trace = global_trace[len(facts):]
                 if new_trace == []:
                     self.destination_reached()
                     return
-                new_start = global_trace[1].arguments[-1].arguments[0].name
-                new_start_time = start_time + 2
+                new_start = global_trace[len(facts)-1].arguments[-1].arguments[0].name
+                new_start_time = start_time + len(facts)
                 print("Remaining trace", [str(x) for x in new_trace], " from ", new_start, "\n")
                 self.run_short_path(new_trace, new_start, new_start_time)
 
