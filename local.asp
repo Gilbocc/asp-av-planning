@@ -23,21 +23,6 @@ atom(stop(T, X)) :- tf(T, X).
 tf(T, X) :- fact(traffic_light(ID, X)), fact(state(T, traffic_light(ID, red))).
 
 % -------------------------------------
-% World State
-% -------------------------------------
-
-%time(0..2).
-
-%fact(state(0, fuel(2))).
-fact(state(0, direction(forward))).
-fact(state(0, traffic_light(tl1, red))).
-
-fact(state(T, traffic_light(tl2, red))) :- time(T), T \ 2 = 0.
--fact(state(T, traffic_light(tl2, green))) :- time(T), T \ 2 = 0.
-fact(state(T, traffic_light(tl2, green))) :- time(T), T \ 2 = 1.
--fact(state(T, traffic_light(tl2, red))) :- time(T), T \ 2 = 1.
-
-% -------------------------------------
 % Planning Problem
 % -------------------------------------
 

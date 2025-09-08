@@ -19,10 +19,12 @@ class ClingoApp(Application):
 
     def __init__(self, name):
         self.program_name = name
+        self.full_path = []
 
     def main(self, ctl, files):
         print("Starting optimization...\n")
         self.select_action()
+        print("Full path taken:", [str(x) for x in self.full_path], "\n")
 
     def get_optimum_trace(self, global_asp_path, start, start_time, ignore=None):
         ctl = clingo.Control([f"--parallel-mode={cpu_count}"])
@@ -64,11 +66,11 @@ class ClingoApp(Application):
 
     # Convert trace atoms to global_trace facts
 
-    def trace_atoms_to_global_trace(self, atoms):
-        facts = []
-        for atom in atoms:
-            arguments = atom.arguments
-            facts.append(Function("global_trace", arguments))
+    def trace_atoms_to_global_trace(self, facts):
+        # facts = []
+        # for atom in atoms:
+        #     arguments = atom.arguments
+        #     facts.append(Function("global_trace", arguments))
         # print("\n", "Input trace atoms:", type(atoms))
         # print("Extracted trace atoms:", facts, "\n")
         facts.sort(key=lambda x: int(x.arguments[0].number))
@@ -82,17 +84,18 @@ class ClingoApp(Application):
             if real_plen == PATH_LENGTH:
                 return facts[:i+1]
 
-    def get_local_trace(self, local, start, start_time, facts):
+    def get_local_trace(self, local, start, start_time, facts, direction):
         string_facts = [str(x) + "." for x in facts]
         goal = facts[-1].arguments[-1].arguments[0]
         print("Getting local trace with facts:", string_facts, "from", start, "to", goal, "at", start_time, "\n")
         ctl = clingo.Control(["--warn=none"])
         ctl.load(local)
         ctl.add("base", [], f"fact(state({start_time}, position({start}))).")
-        ctl.add("base", [], f"fact(state({start_time}, direction(forward))).")
+        ctl.add("base", [], f"fact(state({start_time}, direction({direction}))).")
         ctl.add("base", [], f"time({start_time}..{start_time+TIME_SPAN}).")
         ctl.add("base", [], f"goal :- fact(state(_, position({goal}))).\n:- not goal.")
-        ctl.add("base", [], '\n'.join(string_facts))
+        # ctl.add("base", [], f"fact(emergency).")
+        # ctl.add("base", [], '\n'.join(string_facts))
         ctl.ground([("base", [])])
         proposed_models = []
         min_cost = None
@@ -114,9 +117,14 @@ class ClingoApp(Application):
     def destination_reached(self):
         print("Destination reached! \N{smiling face with sunglasses}", "\n")
 
-    def run_short_path(self, global_trace, start, start_time):
+    def run_short_path(self, global_trace, start, start_time, direction):
         facts = self.trace_atoms_to_global_trace(global_trace)
-        proposed_model = self.get_local_trace(local_asp, start, start_time, facts)[0]
+        # start_node = [x for x in facts if x.arguments[1].name == "move"][0]
+        start_node = facts[0]
+        # start = start_node.arguments[1].arguments[0].name
+        start_time = start_node.arguments[0].number
+        # print(f"Running short path from {start} at time {start_time}", "\n")
+        proposed_model = self.get_local_trace(local_asp, start, start_time, facts, direction)[0]
         if not proposed_model:
             print("No proposed model found.", "\n")
             # This shouldn't happen, but if there is no valid short term plan at all then call the long term planner again.
@@ -136,6 +144,12 @@ class ClingoApp(Application):
                 self.select_action(ignore=proposed_model, start=start, start_time=start_time)
             else:
                 print("No violation detected. Action accepted. Continuing...", "\n")
+                direction_changes = len([x for x in proposed_model if x.arguments[1].name == "invert"])
+                # print(f"Direction changes in this path: {direction_changes}", "\n")
+                if direction_changes % 2 == 1:
+                    direction = "backward" if direction == "forward" else "forward"
+                    # print(f"Direction changed to {direction}", "\n")
+                self.full_path.extend(proposed_model)
                 new_trace = global_trace[len(facts):]
                 if new_trace == []:
                     self.destination_reached()
@@ -143,16 +157,16 @@ class ClingoApp(Application):
                 new_start = global_trace[len(facts)-1].arguments[-1].arguments[0].name
                 new_start_time = start_time + len(facts)
                 print("Remaining trace", [str(x) for x in new_trace], " from ", new_start, "\n")
-                self.run_short_path(new_trace, new_start, new_start_time)
+                self.run_short_path(new_trace, new_start, new_start_time, direction)
 
-    def select_action(self, ignore=None, start="a", start_time=0):
+    def select_action(self, ignore=None, start="a", start_time=0, direction="forward"):
         models, cost = self.get_optimum_trace(global_asp, start, start_time, ignore)
         print(f"Found {len(models)} optimum models with cost {cost}.", "\n")
         if models:
             global_trace = list(models[0])
             global_trace.sort(key=lambda x: x.arguments[0].number)
             print("Global trace:", [str(x) for x in global_trace], "\n")
-            self.run_short_path(global_trace, start, start_time)
+            self.run_short_path(global_trace, start, start_time, direction)
         else:
             print("No optimum trace found.", "\n")
 

@@ -17,8 +17,6 @@ time(0..30).
 goal :- fact(state(_, position(g))).
 :- not goal.
 
-% fact(state(0, position(a))).
-% fact(state(0, fuel(100))).
 fact(state(0, direction(forward))).
 
 weight(X, 2) :- fact(traffic_light(_, X)).
