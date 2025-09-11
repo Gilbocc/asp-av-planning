@@ -10,19 +10,11 @@ connected(a,c).
 connected(c,d).
 connected(d,e).
 connected(e,g).
-connected(a,x).
-connected(x,y).
-connected(y,z).
-connected(z,g).
-connected(x,d).
 
 fact(traffic_light(tl1, b)).
 fact(traffic_light(tl2, d)).
-fact(traffic_light(tl3, x)).
 
 fact(state(0, traffic_light(tl1, red))).
-% fact(gas_station(gs1, y)).
-% fact(gas_station(gs2, e)).
 
 next(T, X, Y) :- fact(state(T, direction(forward))), connected(X, Y).
 next(T, X, Y) :- fact(state(T, direction(backward))), connected(Y, X).
